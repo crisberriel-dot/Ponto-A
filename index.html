@@ -28,7 +28,7 @@
   }
   *{box-sizing:border-box;}
   body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-body);-webkit-font-smoothing:antialiased;}
-  .app{max-width:760px;margin:0 auto;padding:24px 16px 80px;}
+  .app{max-width:760px;margin:0 auto;padding:calc(24px + env(safe-area-inset-top)) 16px calc(80px + env(safe-area-inset-bottom));}
   header.top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:28px;padding-bottom:20px;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:12px;}
   header.top h1{font-family:var(--font-display);font-weight:400;font-size:26px;margin:0 0 4px;letter-spacing:0.2px;}
   header.top .sub{color:var(--text-dim);font-size:13px;}
@@ -58,6 +58,16 @@
   .caixinha-item{display:flex;gap:8px;align-items:center;margin-bottom:8px;}
   .caixinha-item input{flex:1;}
   .caixinha-item .rm{flex:0 0 auto;color:var(--coral);cursor:pointer;font-size:18px;padding:0 6px;}
+  .cartao-item{border:1px solid var(--border);border-radius:6px;padding:10px 10px 8px;margin-bottom:10px;}
+  .cartao-item .row{margin-top:8px;}
+  .cartao-item .row:first-child{margin-top:0;align-items:center;}
+  .cartao-item .rm{flex:0 0 auto;color:var(--coral);cursor:pointer;font-size:18px;padding:0 6px;}
+  .cartao-resumo{padding:8px 0;border-bottom:1px solid var(--border);}
+  .cartao-resumo:last-child{border-bottom:none;}
+  .cartao-resumo .l1{display:flex;justify-content:space-between;font-size:12px;}
+  .cartao-resumo .l1 .nome{font-weight:600;}
+  .cartao-resumo .l2{display:flex;justify-content:space-between;font-size:11px;color:var(--text-dim);margin-top:2px;font-family:var(--font-mono);}
+  .pgto-tag{font-size:9px;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-dim);border:1px solid var(--border);border-radius:3px;padding:1px 5px;margin-right:6px;}
   .add-link{color:var(--gold);font-size:12px;cursor:pointer;display:inline-block;margin-top:6px;}
   .timeline{display:flex;gap:4px;align-items:flex-end;height:96px;margin:18px 0 6px;background:var(--surface-2);border-radius:8px;padding:12px 10px 8px;}
   .tl-day{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;height:100%;justify-content:flex-end;}
@@ -163,7 +173,7 @@ async function loadAll(){
     sb.from('limits_config').select('*').eq('user_id', uid)
   ]);
   state.pontoA = pa.data ? { saldoConta: pa.data.saldo_conta, cartoes: pa.data.cartoes || [], caixinhas: pa.data.caixinhas || [] } : null;
-  state.entries = (en.data||[]).map(e => ({ id:e.id, tipo:e.tipo, data:e.data, categoria:e.categoria, valor:e.valor, desc:e.descricao||'' }));
+  state.entries = (en.data||[]).map(e => ({ id:e.id, tipo:e.tipo, data:e.data, categoria:e.categoria, valor:e.valor, desc:e.descricao||'', formaPagamento:e.forma_pagamento||'Conta/Pix/Débito' }));
   state.goals = (go.data||[]).map(g => ({ id:g.id, tipo:g.tipo, nome:g.nome, valorAlvo:g.valor_alvo, valorAtual:g.valor_atual }));
   state.limits = (li.data||[]).map(l => ({ categoria:l.categoria, valor:l.valor }));
   render();
@@ -175,7 +185,7 @@ async function savePontoA(p){
 }
 async function addEntry(entry){
   const uid = session.user.id;
-  const { data } = await sb.from('entries').insert({ user_id:uid, tipo:entry.tipo, data:entry.data, categoria:entry.categoria, valor:entry.valor, descricao:entry.desc }).select().single();
+  const { data } = await sb.from('entries').insert({ user_id:uid, tipo:entry.tipo, data:entry.data, categoria:entry.categoria, valor:entry.valor, descricao:entry.desc, forma_pagamento:entry.formaPagamento }).select().single();
   return data;
 }
 async function deleteEntry(id){ await sb.from('entries').delete().eq('id', id); }
@@ -197,7 +207,10 @@ async function deleteLimit(categoria){
 function saldoAtual(){
   if(!state.pontoA) return 0;
   let base = Number(state.pontoA.saldoConta)||0;
-  for(const e of state.entries){ base += e.tipo==='entrada' ? Number(e.valor) : -Number(e.valor); }
+  for(const e of state.entries){
+    if(e.tipo==='entrada'){ base += Number(e.valor); }
+    else if(!e.formaPagamento || e.formaPagamento==='Conta/Pix/Débito'){ base -= Number(e.valor); }
+  }
   return base;
 }
 function totalCaixinhas(){ if(!state.pontoA) return 0; return (state.pontoA.caixinhas||[]).reduce((s,c)=>s+(Number(c.valor)||0),0); }
@@ -211,6 +224,23 @@ function weekRange(ref){
 }
 function entriesInRange(dates){ const set = new Set(dates); return state.entries.filter(e=>set.has(e.data)); }
 function monthKey(dateStr){ return dateStr.slice(0,7); }
+
+function invoiceCycle(diaFechamento, ref){
+  const df = Math.min(28, Math.max(1, Number(diaFechamento)||1));
+  const d = new Date(ref+'T00:00:00');
+  let endMonth = d.getMonth(), endYear = d.getFullYear();
+  if(d.getDate() > df){ endMonth += 1; if(endMonth>11){ endMonth=0; endYear+=1; } }
+  const cycleEnd = new Date(endYear, endMonth, df);
+  const cycleStart = new Date(cycleEnd);
+  cycleStart.setMonth(cycleStart.getMonth()-1);
+  cycleStart.setDate(df+1);
+  return { start: cycleStart.toISOString().slice(0,10), end: cycleEnd.toISOString().slice(0,10) };
+}
+function faturaAtual(cartaoNome, diaFechamento){
+  const { start, end } = invoiceCycle(diaFechamento, todayISO());
+  return state.entries.filter(e=>e.tipo==='saida' && e.formaPagamento===cartaoNome && e.data>=start && e.data<=end)
+    .reduce((s,e)=>s+Number(e.valor),0);
+}
 
 // ---------- RENDER ----------
 function render(){
@@ -272,11 +302,17 @@ function renderPontoA(){
         <input type="number" class="cx-valor" placeholder="Valor" value="${c.valor!==undefined?c.valor:''}">
         <span class="rm" data-rm-cx="${i}">×</span>
       </div>`).join('');
-    const cartoesHtml = (p.cartoes && p.cartoes.length ? p.cartoes : [{nome:'',limite:''}]).map((c,i)=>`
-      <div class="caixinha-item" data-idx="${i}">
-        <input type="text" class="ct-nome" placeholder="Nome do cartão" value="${c.nome||''}">
-        <input type="number" class="ct-limite" placeholder="Limite" value="${c.limite!==undefined?c.limite:''}">
-        <span class="rm" data-rm-ct="${i}">×</span>
+    const cartoesHtml = (p.cartoes && p.cartoes.length ? p.cartoes : [{nome:'',limite:'',diaFechamento:'',diaVencimento:''}]).map((c,i)=>`
+      <div class="cartao-item" data-idx="${i}">
+        <div class="row">
+          <input type="text" class="ct-nome" placeholder="Nome do cartão" value="${c.nome||''}">
+          <span class="rm" data-rm-ct="${i}">×</span>
+        </div>
+        <div class="row">
+          <input type="number" class="ct-limite" placeholder="Limite" value="${c.limite!==undefined?c.limite:''}">
+          <input type="number" class="ct-fechamento" placeholder="Dia fecha (1-28)" min="1" max="28" value="${c.diaFechamento!==undefined?c.diaFechamento:''}">
+          <input type="number" class="ct-vencimento" placeholder="Dia vence (1-28)" min="1" max="28" value="${c.diaVencimento!==undefined?c.diaVencimento:''}">
+        </div>
       </div>`).join('');
     return `
     <section class="card">
@@ -298,7 +334,16 @@ function renderPontoA(){
   const p = state.pontoA;
   const cartoes = p.cartoes || [];
   const totalLimite = cartoes.reduce((s,c)=>s+(Number(c.limite)||0),0);
-  const cartoesResumo = cartoes.length ? cartoes.map(c=>`<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;"><span>${c.nome}</span><span style="font-family:var(--font-mono);">${brl(c.limite)}</span></div>`).join('') : '<div class="hint">Nenhum cartão cadastrado.</div>';
+  const cartoesResumo = cartoes.length ? cartoes.map(c=>{
+    const df = Number(c.diaFechamento)||1;
+    const fatura = faturaAtual(c.nome, df);
+    const disponivel = (Number(c.limite)||0) - fatura;
+    return `<div class="cartao-resumo">
+      <div class="l1"><span class="nome">${c.nome}</span><span style="font-family:var(--font-mono);">${brl(c.limite)}</span></div>
+      <div class="l2"><span>Fatura atual: ${brl(fatura)}</span><span style="color:${disponivel<0?'var(--coral)':'var(--teal)'}">Disponível: ${brl(disponivel)}</span></div>
+      <div class="hint" style="margin-top:2px;">Fecha dia ${df}${c.diaVencimento?` · vence dia ${c.diaVencimento}`:''}</div>
+    </div>`;
+  }).join('') : '<div class="hint">Nenhum cartão cadastrado.</div>';
   return `
     <section class="card">
       <h2 class="section-title"><span class="n">01</span> Ponto de partida <span class="toggle-link" id="edit-pa" style="margin-left:auto;font-family:var(--font-body);">editar</span></h2>
@@ -360,6 +405,16 @@ function generateTips(weekEntries, totalEntradas, totalSaidas){
       tips.push({type:'default', text:`"${lim.categoria}" já está em ${brl(gasto)} dos ${brl(lim.valor)} semanais.`});
     }
   }
+  if(state.pontoA && state.pontoA.cartoes){
+    for(const c of state.pontoA.cartoes){
+      const limite = Number(c.limite)||0;
+      if(limite<=0) continue;
+      const fatura = faturaAtual(c.nome, Number(c.diaFechamento)||1);
+      const pct = fatura/limite;
+      if(pct >= 1){ tips.push({type:'alert', text:`Cartão "${c.nome}" estourou o limite: fatura atual de ${brl(fatura)} contra ${brl(limite)} disponíveis.`}); }
+      else if(pct >= 0.8){ tips.push({type:'default', text:`Cartão "${c.nome}" já usou ${Math.round(pct*100)}% do limite nesta fatura (${brl(fatura)} de ${brl(limite)}).`}); }
+    }
+  }
   const grandes = weekEntries.filter(e=>e.tipo==='saida' && Number(e.valor)>=300);
   if(grandes.length){ tips.push({type:'default', text:`Teve ${grandes.length} gasto${grandes.length>1?'s':''} acima de R$ 300 essa semana. Compras grandes rendem mais quando planejadas com antecedência.`}); }
   const aporte = weekEntries.filter(e=>e.tipo==='saida' && e.categoria==='Aporte em caixinha').reduce((s,e)=>s+Number(e.valor),0);
@@ -382,17 +437,27 @@ function renderEntryForm(){
       <div><label>Categoria</label><select id="e-categoria">${CAT_SAIDA.map(c=>`<option>${c}</option>`).join('')}</select></div>
       <div><label>Valor</label><input type="number" id="e-valor" placeholder="0,00"></div>
     </div>
+    <div id="e-pgto-wrap">
+      <label>Forma de pagamento</label>
+      <select id="e-pgto">${formaPagamentoOptions()}</select>
+    </div>
     <label>Observação (opcional)</label>
     <input type="text" id="e-desc" placeholder="ex: pizza, mercado do mês...">
     <div class="btn-row"><button class="btn-primary" id="add-entry">Registrar</button></div>
   </section>`;
 }
 
+function formaPagamentoOptions(){
+  const cartoes = (state.pontoA && state.pontoA.cartoes) || [];
+  const opts = ['Conta/Pix/Débito', ...cartoes.map(c=>c.nome)];
+  return opts.map(o=>`<option>${o}</option>`).join('');
+}
+
 function renderEntriesList(){
   const sorted = [...state.entries].sort((a,b)=>b.data.localeCompare(a.data)).slice(0,25);
   const rows = sorted.map(e=>`
     <div class="entry">
-      <div class="entry-left"><span class="cat">${e.categoria}</span><span class="meta">${new Date(e.data+'T00:00:00').toLocaleDateString('pt-BR')}${e.desc?' · '+e.desc:''}</span></div>
+      <div class="entry-left"><span class="cat">${e.formaPagamento && e.formaPagamento!=='Conta/Pix/Débito' ? `<span class="pgto-tag">${e.formaPagamento}</span>`:''}${e.categoria}</span><span class="meta">${new Date(e.data+'T00:00:00').toLocaleDateString('pt-BR')}${e.desc?' · '+e.desc:''}</span></div>
       <div class="entry-right"><span class="val ${e.tipo==='entrada'?'pos':'neg'}">${e.tipo==='entrada'?'+':'-'} ${brl(Math.abs(e.valor))}</span><span class="del" data-del="${e.id}">×</span></div>
     </div>`).join('');
   return `<section class="card"><h2 class="section-title"><span class="n">04</span> Últimos lançamentos</h2>${sorted.length?rows:'<div class="empty-state">Nenhum lançamento ainda.</div>'}</section>`;
@@ -477,11 +542,12 @@ function renderExport(){
 }
 
 function buildCSV(entries){
-  const header = ['Data','Tipo','Categoria','Valor','Observação'];
+  const header = ['Data','Tipo','Categoria','Forma de pagamento','Valor','Observação'];
   const rows = [...entries].sort((a,b)=>a.data.localeCompare(b.data)).map(e=>[
     new Date(e.data+'T00:00:00').toLocaleDateString('pt-BR'),
     e.tipo==='entrada'?'Entrada':'Saída',
     e.categoria,
+    e.formaPagamento||'Conta/Pix/Débito',
     Number(e.valor).toFixed(2).replace('.',','),
     (e.desc||'').replace(/;/g,',')
   ]);
@@ -509,7 +575,9 @@ function attachHandlers(){
       const caixinhas = cxNomes.map((n,i)=>({nome:n||`Caixinha ${i+1}`, valor:cxValores[i]})).filter(c=>c.nome);
       const ctNomes = Array.from(document.querySelectorAll('.ct-nome')).map(i=>i.value.trim());
       const ctLimites = Array.from(document.querySelectorAll('.ct-limite')).map(i=>Number(i.value)||0);
-      const cartoes = ctNomes.map((n,i)=>({nome:n||`Cartão ${i+1}`, limite:ctLimites[i]})).filter(c=>c.nome);
+      const ctFechamentos = Array.from(document.querySelectorAll('.ct-fechamento')).map(i=>Number(i.value)||1);
+      const ctVencimentos = Array.from(document.querySelectorAll('.ct-vencimento')).map(i=>Number(i.value)||null);
+      const cartoes = ctNomes.map((n,i)=>({nome:n||`Cartão ${i+1}`, limite:ctLimites[i], diaFechamento:ctFechamentos[i], diaVencimento:ctVencimentos[i]})).filter(c=>c.nome);
       state.pontoA = { saldoConta: Number($('pa-saldo').value)||0, cartoes, caixinhas };
       editingPontoA = false;
       await savePontoA(state.pontoA);
@@ -531,19 +599,21 @@ function attachHandlers(){
   if($('add-ct')){
     $('add-ct').onclick = ()=>{
       const list = $('ct-list');
-      const div = document.createElement('div'); div.className='caixinha-item';
-      div.innerHTML = `<input type="text" class="ct-nome" placeholder="Nome do cartão"><input type="number" class="ct-limite" placeholder="Limite"><span class="rm">×</span>`;
+      const div = document.createElement('div'); div.className='cartao-item';
+      div.innerHTML = `<div class="row"><input type="text" class="ct-nome" placeholder="Nome do cartão"><span class="rm">×</span></div><div class="row"><input type="number" class="ct-limite" placeholder="Limite"><input type="number" class="ct-fechamento" placeholder="Dia fecha (1-28)" min="1" max="28"><input type="number" class="ct-vencimento" placeholder="Dia vence (1-28)" min="1" max="28"></div>`;
       div.querySelector('.rm').onclick = ()=>div.remove();
       list.appendChild(div);
     };
   }
-  document.querySelectorAll('[data-rm-ct]').forEach(el=>{ el.onclick = ()=> el.closest('.caixinha-item').remove(); });
+  document.querySelectorAll('[data-rm-ct]').forEach(el=>{ el.onclick = ()=> el.closest('.cartao-item').remove(); });
 
   if($('add-entry')){
     $('add-entry').onclick = async ()=>{
       const valor = Number($('e-valor').value);
       if(!valor || valor<=0){ $('e-valor').focus(); return; }
-      const entry = { tipo: $('e-tipo').value, data: $('e-data').value || todayISO(), categoria: $('e-categoria').value, valor, desc: $('e-desc').value.trim() };
+      const tipo = $('e-tipo').value;
+      const formaPagamento = tipo==='saida' ? $('e-pgto').value : 'Conta/Pix/Débito';
+      const entry = { tipo, data: $('e-data').value || todayISO(), categoria: $('e-categoria').value, valor, desc: $('e-desc').value.trim(), formaPagamento };
       const saved = await addEntry(entry);
       state.entries.push({ id:saved.id, ...entry });
       render();
@@ -554,6 +624,8 @@ function attachHandlers(){
       const sel = $('e-categoria');
       const opts = ev.target.value==='entrada' ? CAT_ENTRADA : CAT_SAIDA;
       sel.innerHTML = opts.map(c=>`<option>${c}</option>`).join('');
+      const pgtoWrap = $('e-pgto-wrap');
+      if(pgtoWrap) pgtoWrap.style.display = ev.target.value==='entrada' ? 'none' : 'block';
     };
   }
   document.querySelectorAll('[data-del]').forEach(el=>{
