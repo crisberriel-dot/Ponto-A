@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Ponto A — Controle Financeiro</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#12181A">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<style>
+  :root{
+    --bg:#12181A;
+    --surface:#1A2226;
+    --surface-2:#212B30;
+    --border:#2B363B;
+    --text:#EDE7DA;
+    --text-dim:#93A0A2;
+    --gold:#C9A24B;
+    --gold-dim:#8B7538;
+    --coral:#D06A4C;
+    --teal:#4E8C82;
+    --font-display:Georgia,'Iowan Old Style','Palatino Linotype',serif;
+    --font-mono:'SF Mono',SFMono-Regular,Menlo,Consolas,monospace;
+    --font-body:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-body);-webkit-font-smoothing:antialiased;}
+  .app{max-width:760px;margin:0 auto;padding:24px 16px 80px;}
+  header.top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:28px;padding-bottom:20px;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:12px;}
+  header.top h1{font-family:var(--font-display);font-weight:400;font-size:26px;margin:0 0 4px;letter-spacing:0.2px;}
+  header.top .sub{color:var(--text-dim);font-size:13px;}
+  .saldo-chip{text-align:right;}
+  .saldo-chip .label{font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.08em;}
+  .saldo-chip .value{font-family:var(--font-mono);font-size:26px;font-weight:600;}
+  .saldo-chip .value.neg{color:var(--coral);}
+  .saldo-chip .value.pos{color:var(--gold);}
+  section{margin-bottom:32px;}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px 18px;}
+  h2.section-title{font-family:var(--font-display);font-weight:400;font-size:16px;margin:0 0 14px;display:flex;align-items:center;gap:8px;color:var(--text);}
+  h2.section-title .n{color:var(--gold);font-family:var(--font-mono);font-size:13px;}
+  label{display:block;font-size:12px;color:var(--text-dim);margin-bottom:4px;margin-top:12px;}
+  label:first-child{margin-top:0;}
+  input,select{width:100%;background:var(--surface-2);border:1px solid var(--border);color:var(--text);padding:9px 10px;border-radius:6px;font-size:14px;font-family:var(--font-body);}
+  input:focus,select:focus{outline:none;border-color:var(--gold-dim);}
+  input[type=number]{font-family:var(--font-mono);}
+  .row{display:flex;gap:10px;}
+  .row > *{flex:1;}
+  button{font-family:var(--font-body);font-size:13px;font-weight:600;letter-spacing:0.02em;border:none;border-radius:6px;padding:10px 16px;cursor:pointer;}
+  .btn-primary{background:var(--gold);color:#1A1405;}
+  .btn-primary:hover{background:#DBB35F;}
+  .btn-primary:disabled{opacity:0.5;cursor:default;}
+  .btn-ghost{background:transparent;color:var(--text-dim);border:1px solid var(--border);}
+  .btn-ghost:hover{color:var(--text);border-color:var(--text-dim);}
+  .btn-row{margin-top:14px;display:flex;gap:10px;justify-content:flex-end;}
+  .caixinha-item{display:flex;gap:8px;align-items:center;margin-bottom:8px;}
+  .caixinha-item input{flex:1;}
+  .caixinha-item .rm{flex:0 0 auto;color:var(--coral);cursor:pointer;font-size:18px;padding:0 6px;}
+  .add-link{color:var(--gold);font-size:12px;cursor:pointer;display:inline-block;margin-top:6px;}
+  .timeline{display:flex;gap:4px;align-items:flex-end;height:96px;margin:18px 0 6px;background:var(--surface-2);border-radius:8px;padding:12px 10px 8px;}
+  .tl-day{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;height:100%;justify-content:flex-end;}
+  .tl-bar-wrap{height:64px;width:100%;display:flex;align-items:flex-end;justify-content:center;position:relative;}
+  .tl-bar{width:60%;border-radius:3px 3px 0 0;min-height:2px;}
+  .tl-bar.pos{background:var(--teal);}
+  .tl-bar.neg{background:var(--coral);}
+  .tl-bar.empty{background:var(--border);min-height:2px;}
+  .tl-label{font-size:10px;color:var(--text-dim);font-family:var(--font-mono);}
+  .tl-day.today .tl-label{color:var(--gold);font-weight:700;}
+  .tl-day.today{position:relative;}
+  .tl-day.today::after{content:'';position:absolute;top:-6px;left:50%;transform:translateX(-50%);width:4px;height:4px;border-radius:50%;background:var(--gold);}
+  .week-summary{display:flex;justify-content:space-between;font-size:12px;color:var(--text-dim);margin-top:10px;}
+  .week-summary b{color:var(--text);font-family:var(--font-mono);}
+  .tips{margin-top:16px;}
+  .tip{display:flex;gap:10px;padding:10px 12px;border-radius:6px;background:var(--surface-2);margin-bottom:8px;font-size:13px;line-height:1.5;border-left:3px solid var(--gold-dim);}
+  .tip.alert{border-left-color:var(--coral);}
+  .tip.good{border-left-color:var(--teal);}
+  .tip .icon{flex:0 0 auto;font-family:var(--font-mono);color:var(--text-dim);}
+  .entry{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);font-size:13px;}
+  .entry:last-child{border-bottom:none;}
+  .entry .meta{color:var(--text-dim);font-size:11px;}
+  .entry .cat{font-weight:600;}
+  .entry .val{font-family:var(--font-mono);font-weight:600;}
+  .entry .val.pos{color:var(--teal);}
+  .entry .val.neg{color:var(--coral);}
+  .entry .del{color:var(--text-dim);cursor:pointer;font-size:16px;margin-left:10px;}
+  .entry .del:hover{color:var(--coral);}
+  .entry-left{display:flex;flex-direction:column;gap:2px;}
+  .entry-right{display:flex;align-items:center;}
+  .empty-state{color:var(--text-dim);font-size:13px;padding:14px 0;text-align:center;}
+  .goal{margin-bottom:16px;}
+  .goal:last-child{margin-bottom:0;}
+  .goal-head{display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px;}
+  .goal-head .name{font-weight:600;}
+  .goal-head .tag{font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.06em;}
+  .goal-bar-track{height:8px;background:var(--surface-2);border-radius:4px;overflow:hidden;}
+  .goal-bar-fill{height:100%;background:var(--teal);border-radius:4px;}
+  .goal-nums{display:flex;justify-content:space-between;font-size:11px;color:var(--text-dim);margin-top:4px;font-family:var(--font-mono);}
+  .limit-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;}
+  .limit-row:last-child{border-bottom:none;}
+  .mbar-row{margin-bottom:10px;}
+  .mbar-label{display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;}
+  .mbar-label .pct{color:var(--text-dim);font-family:var(--font-mono);}
+  .mbar-track{height:6px;background:var(--surface-2);border-radius:3px;overflow:hidden;}
+  .mbar-fill{height:100%;background:var(--gold);border-radius:3px;}
+  .loading{text-align:center;color:var(--text-dim);padding:60px 0;font-size:13px;}
+  .toggle-link{color:var(--gold);font-size:12px;cursor:pointer;}
+  .hint{font-size:11px;color:var(--text-dim);margin-top:8px;line-height:1.5;}
+  .error-box{background:rgba(208,106,76,0.12);border:1px solid var(--coral);color:var(--coral);padding:10px 12px;border-radius:6px;font-size:12px;margin-top:12px;}
+  .login-wrap{max-width:340px;margin:80px auto;padding:0 20px;}
+  .login-wrap h1{font-family:var(--font-display);font-weight:400;font-size:24px;text-align:center;margin-bottom:24px;}
+  .logout-link{color:var(--text-dim);font-size:11px;cursor:pointer;text-decoration:underline;}
+  @media (max-width:480px){
+    header.top{flex-direction:column;}
+    .saldo-chip{text-align:left;}
+    .row{flex-direction:column;gap:0;}
+  }
+</style>
+</head>
+<body>
+<div class="app" id="app"><div class="loading">Carregando...</div></div>
+
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const sb = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+
+const CAT_ENTRADA = ['Fixo Nitro','Bonificação','Freelance / Maqhidrau','Reembolso','Outra entrada'];
+const CAT_SAIDA = ['Moradia','Pensão Nininha','Família / ajuda extra','Mônica','Mercado','Lanches','Transporte','Saúde','Contas / assinaturas / MEI','Lazer','Datas especiais','Compras pessoais','Dízimo / ofertas','Aporte em caixinha','Outros'];
+const GOAL_TYPES = [['bem','Bem material'],['poupanca','Poupança'],['investimento','Investimento']];
+
+let session = null;
+let state = { pontoA:null, entries:[], goals:[], limits:[] };
+let editingPontoA = false;
+let authError = '';
+
+function brl(v){ const n = Number(v)||0; return (n<0?'-':'') + 'R$ ' + Math.abs(n).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function todayISO(){ return new Date().toISOString().slice(0,10); }
+
+// ---------- AUTH ----------
+async function initAuth(){
+  const { data } = await sb.auth.getSession();
+  session = data.session;
+  sb.auth.onAuthStateChange((_event, s) => { session = s; render(); if(s) loadAll(); });
+  if(session){ await loadAll(); } else { render(); }
+}
+
+async function doLogin(email, password){
+  authError = '';
+  const { error } = await sb.auth.signInWithPassword({ email, password });
+  if(error){ authError = 'E-mail ou senha incorretos.'; render(); }
+}
+async function doLogout(){ await sb.auth.signOut(); state = { pontoA:null, entries:[], goals:[], limits:[] }; render(); }
+
+// ---------- DATA ----------
+async function loadAll(){
+  const uid = session.user.id;
+  const [pa, en, go, li] = await Promise.all([
+    sb.from('ponto_a').select('*').eq('user_id', uid).maybeSingle(),
+    sb.from('entries').select('*').eq('user_id', uid).order('data', {ascending:false}),
+    sb.from('goals').select('*').eq('user_id', uid).order('created_at'),
+    sb.from('limits_config').select('*').eq('user_id', uid)
+  ]);
+  state.pontoA = pa.data ? { saldoConta: pa.data.saldo_conta, cartoes: pa.data.cartoes || [], caixinhas: pa.data.caixinhas || [] } : null;
+  state.entries = (en.data||[]).map(e => ({ id:e.id, tipo:e.tipo, data:e.data, categoria:e.categoria, valor:e.valor, desc:e.descricao||'' }));
+  state.goals = (go.data||[]).map(g => ({ id:g.id, tipo:g.tipo, nome:g.nome, valorAlvo:g.valor_alvo, valorAtual:g.valor_atual }));
+  state.limits = (li.data||[]).map(l => ({ categoria:l.categoria, valor:l.valor }));
+  render();
+}
+
+async function savePontoA(p){
+  const uid = session.user.id;
+  await sb.from('ponto_a').upsert({ user_id:uid, saldo_conta:p.saldoConta, cartoes:p.cartoes, caixinhas:p.caixinhas, updated_at:new Date().toISOString() });
+}
+async function addEntry(entry){
+  const uid = session.user.id;
+  const { data } = await sb.from('entries').insert({ user_id:uid, tipo:entry.tipo, data:entry.data, categoria:entry.categoria, valor:entry.valor, descricao:entry.desc }).select().single();
+  return data;
+}
+async function deleteEntry(id){ await sb.from('entries').delete().eq('id', id); }
+async function addGoal(g){
+  const uid = session.user.id;
+  const { data } = await sb.from('goals').insert({ user_id:uid, tipo:g.tipo, nome:g.nome, valor_alvo:g.valorAlvo, valor_atual:g.valorAtual }).select().single();
+  return data;
+}
+async function deleteGoal(id){ await sb.from('goals').delete().eq('id', id); }
+async function upsertLimit(l){
+  const uid = session.user.id;
+  await sb.from('limits_config').upsert({ user_id:uid, categoria:l.categoria, valor:l.valor });
+}
+async function deleteLimit(categoria){
+  const uid = session.user.id;
+  await sb.from('limits_config').delete().eq('user_id', uid).eq('categoria', categoria);
+}
+
+function saldoAtual(){
+  if(!state.pontoA) return 0;
+  let base = Number(state.pontoA.saldoConta)||0;
+  for(const e of state.entries){ base += e.tipo==='entrada' ? Number(e.valor) : -Number(e.valor); }
+  return base;
+}
+function totalCaixinhas(){ if(!state.pontoA) return 0; return (state.pontoA.caixinhas||[]).reduce((s,c)=>s+(Number(c.valor)||0),0); }
+function weekRange(ref){
+  const d = new Date(ref+'T00:00:00');
+  const day = (d.getDay()+6)%7;
+  const monday = new Date(d); monday.setDate(d.getDate()-day);
+  const days = [];
+  for(let i=0;i<7;i++){ const dd = new Date(monday); dd.setDate(monday.getDate()+i); days.push(dd.toISOString().slice(0,10)); }
+  return days;
+}
+function entriesInRange(dates){ const set = new Set(dates); return state.entries.filter(e=>set.has(e.data)); }
+function monthKey(dateStr){ return dateStr.slice(0,7); }
+
+// ---------- RENDER ----------
+function render(){
+  const app = document.getElementById('app');
+  if(!session){ app.innerHTML = renderLogin(); attachLoginHandlers(); return; }
+
+  const saldo = saldoAtual();
+  app.innerHTML = `
+    <header class="top">
+      <div>
+        <h1>Ponto A</h1>
+        <div class="sub">${session.user.email} · <span class="logout-link" id="logout">sair</span></div>
+      </div>
+      <div class="saldo-chip">
+        <div class="label">Saldo estimado</div>
+        <div class="value ${saldo<0?'neg':'pos'}">${brl(saldo)}</div>
+      </div>
+    </header>
+    ${renderPontoA()}
+    ${state.pontoA ? renderTimeline() : ''}
+    ${state.pontoA ? renderEntryForm() : ''}
+    ${state.pontoA ? renderEntriesList() : ''}
+    ${state.pontoA ? renderGoals() : ''}
+    ${state.pontoA ? renderLimits() : ''}
+    ${state.pontoA ? renderMonthly() : ''}
+    ${state.pontoA ? renderExport() : ''}
+  `;
+  attachHandlers();
+}
+
+function renderLogin(){
+  return `
+  <div class="login-wrap">
+    <h1>Ponto A</h1>
+    <label>E-mail</label>
+    <input type="email" id="li-email" placeholder="seu@email.com">
+    <label>Senha</label>
+    <input type="password" id="li-senha" placeholder="••••••••">
+    ${authError ? `<div class="error-box">${authError}</div>` : ''}
+    <div class="btn-row" style="justify-content:stretch;">
+      <button class="btn-primary" id="li-btn" style="width:100%;">Entrar</button>
+    </div>
+    <div class="hint" style="text-align:center;margin-top:16px;">O usuário é criado no painel do Supabase (Authentication → Add user).</div>
+  </div>`;
+}
+function attachLoginHandlers(){
+  const btn = document.getElementById('li-btn');
+  if(btn){
+    btn.onclick = () => doLogin(document.getElementById('li-email').value.trim(), document.getElementById('li-senha').value);
+  }
+}
+
+function renderPontoA(){
+  if(!state.pontoA || editingPontoA){
+    const p = state.pontoA || {saldoConta:'', cartoes:[], caixinhas:[]};
+    const caixinhasHtml = (p.caixinhas.length?p.caixinhas:[{nome:'',valor:''}]).map((c,i)=>`
+      <div class="caixinha-item" data-idx="${i}">
+        <input type="text" class="cx-nome" placeholder="Nome da caixinha (ex: Mudança)" value="${c.nome||''}">
+        <input type="number" class="cx-valor" placeholder="Valor" value="${c.valor!==undefined?c.valor:''}">
+        <span class="rm" data-rm-cx="${i}">×</span>
+      </div>`).join('');
+    const cartoesHtml = (p.cartoes && p.cartoes.length ? p.cartoes : [{nome:'',limite:''}]).map((c,i)=>`
+      <div class="caixinha-item" data-idx="${i}">
+        <input type="text" class="ct-nome" placeholder="Nome do cartão" value="${c.nome||''}">
+        <input type="number" class="ct-limite" placeholder="Limite" value="${c.limite!==undefined?c.limite:''}">
+        <span class="rm" data-rm-ct="${i}">×</span>
+      </div>`).join('');
+    return `
+    <section class="card">
+      <h2 class="section-title"><span class="n">01</span> Ponto de partida</h2>
+      <label>Saldo atual em conta</label>
+      <input type="number" id="pa-saldo" placeholder="0,00" value="${p.saldoConta!==undefined?p.saldoConta:''}">
+      <label>Cartões de crédito</label>
+      <div id="ct-list">${cartoesHtml}</div>
+      <span class="add-link" id="add-ct">+ adicionar cartão</span>
+      <label>Caixinhas / reservas</label>
+      <div id="cx-list">${caixinhasHtml}</div>
+      <span class="add-link" id="add-cx">+ adicionar caixinha</span>
+      <div class="btn-row">
+        ${state.pontoA?'<button class="btn-ghost" id="cancel-pa">Cancelar</button>':''}
+        <button class="btn-primary" id="save-pa">Salvar ponto A</button>
+      </div>
+    </section>`;
+  }
+  const p = state.pontoA;
+  const cartoes = p.cartoes || [];
+  const totalLimite = cartoes.reduce((s,c)=>s+(Number(c.limite)||0),0);
+  const cartoesResumo = cartoes.length ? cartoes.map(c=>`<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;"><span>${c.nome}</span><span style="font-family:var(--font-mono);">${brl(c.limite)}</span></div>`).join('') : '<div class="hint">Nenhum cartão cadastrado.</div>';
+  return `
+    <section class="card">
+      <h2 class="section-title"><span class="n">01</span> Ponto de partida <span class="toggle-link" id="edit-pa" style="margin-left:auto;font-family:var(--font-body);">editar</span></h2>
+      <div class="row">
+        <div><div class="hint">Saldo em conta</div><div style="font-family:var(--font-mono);font-size:15px;">${brl(p.saldoConta)}</div></div>
+        <div><div class="hint">Total em caixinhas</div><div style="font-family:var(--font-mono);font-size:15px;color:var(--teal);">${brl(totalCaixinhas())}</div></div>
+        <div><div class="hint">Limite total de cartões</div><div style="font-family:var(--font-mono);font-size:15px;">${brl(totalLimite)}</div></div>
+      </div>
+      <div style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px;">
+        <div class="hint" style="margin-bottom:6px;">Cartões</div>
+        ${cartoesResumo}
+      </div>
+    </section>`;
+}
+
+function renderTimeline(){
+  const days = weekRange(todayISO());
+  const today = todayISO();
+  const dayLabels = ['SEG','TER','QUA','QUI','SEX','SÁB','DOM'];
+  const weekEntries = entriesInRange(days);
+  const net = days.map(d=>{
+    const es = weekEntries.filter(e=>e.data===d);
+    return es.reduce((s,e)=>s+(e.tipo==='entrada'?Number(e.valor):-Number(e.valor)),0);
+  });
+  const maxAbs = Math.max(1, ...net.map(n=>Math.abs(n)));
+  const bars = days.map((d,i)=>{
+    const n = net[i];
+    const h = n===0 ? 2 : Math.max(6, Math.round((Math.abs(n)/maxAbs)*60));
+    const cls = n===0?'empty':(n>0?'pos':'neg');
+    return `<div class="tl-day ${d===today?'today':''}"><div class="tl-bar-wrap"><div class="tl-bar ${cls}" style="height:${h}px"></div></div><div class="tl-label">${dayLabels[i]}</div></div>`;
+  }).join('');
+  const totalEntradas = weekEntries.filter(e=>e.tipo==='entrada').reduce((s,e)=>s+Number(e.valor),0);
+  const totalSaidas = weekEntries.filter(e=>e.tipo==='saida').reduce((s,e)=>s+Number(e.valor),0);
+  const saldoSemana = totalEntradas - totalSaidas;
+  const tips = generateTips(weekEntries, totalEntradas, totalSaidas);
+  return `
+  <section class="card">
+    <h2 class="section-title"><span class="n">02</span> Balanço da semana</h2>
+    <div class="timeline">${bars}</div>
+    <div class="week-summary">
+      <span>Entradas: <b style="color:var(--teal)">${brl(totalEntradas)}</b></span>
+      <span>Saídas: <b style="color:var(--coral)">${brl(totalSaidas)}</b></span>
+      <span>Saldo: <b>${brl(saldoSemana)}</b></span>
+    </div>
+    <div class="tips">${tips}</div>
+  </section>`;
+}
+
+function generateTips(weekEntries, totalEntradas, totalSaidas){
+  const tips = [];
+  if(totalSaidas > totalEntradas && totalEntradas>0){
+    tips.push({type:'alert', text:`Você gastou ${brl(totalSaidas-totalEntradas)} a mais do que entrou essa semana. Vale segurar gastos variáveis até o próximo dia de entrada.`});
+  }
+  for(const lim of state.limits){
+    const gasto = weekEntries.filter(e=>e.tipo==='saida' && e.categoria===lim.categoria).reduce((s,e)=>s+Number(e.valor),0);
+    if(Number(lim.valor)>0 && gasto > Number(lim.valor)){
+      tips.push({type:'alert', text:`"${lim.categoria}" passou do limite semanal: ${brl(gasto)} de ${brl(lim.valor)}.`});
+    } else if(Number(lim.valor)>0 && gasto > Number(lim.valor)*0.8){
+      tips.push({type:'default', text:`"${lim.categoria}" já está em ${brl(gasto)} dos ${brl(lim.valor)} semanais.`});
+    }
+  }
+  const grandes = weekEntries.filter(e=>e.tipo==='saida' && Number(e.valor)>=300);
+  if(grandes.length){ tips.push({type:'default', text:`Teve ${grandes.length} gasto${grandes.length>1?'s':''} acima de R$ 300 essa semana. Compras grandes rendem mais quando planejadas com antecedência.`}); }
+  const aporte = weekEntries.filter(e=>e.tipo==='saida' && e.categoria==='Aporte em caixinha').reduce((s,e)=>s+Number(e.valor),0);
+  if(aporte===0 && state.goals.length>0){ tips.push({type:'default', text:`Nenhum aporte em caixinha essa semana.`}); }
+  else if(aporte>0){ tips.push({type:'good', text:`Você guardou ${brl(aporte)} essa semana.`}); }
+  if(totalSaidas===0 && totalEntradas===0){ tips.push({type:'default', text:`Ainda não há lançamentos essa semana.`}); }
+  if(tips.length===0){ tips.push({type:'good', text:`Semana equilibrada até agora.`}); }
+  return tips.map(t=>`<div class="tip ${t.type}"><span class="icon">${t.type==='alert'?'!':(t.type==='good'?'✓':'·')}</span><span>${t.text}</span></div>`).join('');
+}
+
+function renderEntryForm(){
+  return `
+  <section class="card">
+    <h2 class="section-title"><span class="n">03</span> Novo lançamento</h2>
+    <div class="row">
+      <div><label>Tipo</label><select id="e-tipo"><option value="saida">Saída</option><option value="entrada">Entrada</option></select></div>
+      <div><label>Data</label><input type="date" id="e-data" value="${todayISO()}"></div>
+    </div>
+    <div class="row">
+      <div><label>Categoria</label><select id="e-categoria">${CAT_SAIDA.map(c=>`<option>${c}</option>`).join('')}</select></div>
+      <div><label>Valor</label><input type="number" id="e-valor" placeholder="0,00"></div>
+    </div>
+    <label>Observação (opcional)</label>
+    <input type="text" id="e-desc" placeholder="ex: pizza, mercado do mês...">
+    <div class="btn-row"><button class="btn-primary" id="add-entry">Registrar</button></div>
+  </section>`;
+}
+
+function renderEntriesList(){
+  const sorted = [...state.entries].sort((a,b)=>b.data.localeCompare(a.data)).slice(0,25);
+  const rows = sorted.map(e=>`
+    <div class="entry">
+      <div class="entry-left"><span class="cat">${e.categoria}</span><span class="meta">${new Date(e.data+'T00:00:00').toLocaleDateString('pt-BR')}${e.desc?' · '+e.desc:''}</span></div>
+      <div class="entry-right"><span class="val ${e.tipo==='entrada'?'pos':'neg'}">${e.tipo==='entrada'?'+':'-'} ${brl(Math.abs(e.valor))}</span><span class="del" data-del="${e.id}">×</span></div>
+    </div>`).join('');
+  return `<section class="card"><h2 class="section-title"><span class="n">04</span> Últimos lançamentos</h2>${sorted.length?rows:'<div class="empty-state">Nenhum lançamento ainda.</div>'}</section>`;
+}
+
+function renderGoals(){
+  const goalsHtml = state.goals.length ? state.goals.map(g=>{
+    const pct = g.valorAlvo>0 ? Math.min(100, Math.round((g.valorAtual/g.valorAlvo)*100)) : 0;
+    return `<div class="goal">
+      <div class="goal-head"><span class="name">${g.nome}</span><span class="tag">${GOAL_TYPES.find(t=>t[0]===g.tipo)?.[1]||g.tipo} <span class="del" data-del-goal="${g.id}" style="cursor:pointer;color:var(--text-dim);margin-left:6px;">×</span></span></div>
+      <div class="goal-bar-track"><div class="goal-bar-fill" style="width:${pct}%"></div></div>
+      <div class="goal-nums"><span>${brl(g.valorAtual)} de ${brl(g.valorAlvo)}</span><span>${pct}%</span></div>
+    </div>`;
+  }).join('') : '<div class="empty-state">Nenhum objetivo cadastrado ainda.</div>';
+  return `
+  <section class="card">
+    <h2 class="section-title"><span class="n">05</span> Objetivos financeiros</h2>
+    ${goalsHtml}
+    <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px;">
+      <div class="row">
+        <div><label>Tipo</label><select id="g-tipo">${GOAL_TYPES.map(t=>`<option value="${t[0]}">${t[1]}</option>`).join('')}</select></div>
+        <div><label>Nome do objetivo</label><input type="text" id="g-nome" placeholder="ex: iPad da Nininha"></div>
+      </div>
+      <div class="row">
+        <div><label>Valor alvo</label><input type="number" id="g-alvo" placeholder="0,00"></div>
+        <div><label>Valor já guardado</label><input type="number" id="g-atual" placeholder="0,00"></div>
+      </div>
+      <div class="btn-row"><button class="btn-primary" id="add-goal">Adicionar objetivo</button></div>
+    </div>
+  </section>`;
+}
+
+function renderLimits(){
+  const rows = state.limits.map(l=>`<div class="limit-row"><span>${l.categoria}</span><span style="font-family:var(--font-mono);">${brl(l.valor)}/sem <span class="del" data-del-limit="${l.categoria}" style="cursor:pointer;color:var(--text-dim);margin-left:8px;">×</span></span></div>`).join('');
+  return `
+  <section class="card">
+    <h2 class="section-title"><span class="n">06</span> Limites semanais por categoria</h2>
+    ${state.limits.length?rows:'<div class="empty-state">Nenhum limite definido ainda.</div>'}
+    <div style="margin-top:14px;border-top:1px solid var(--border);padding-top:14px;">
+      <div class="row">
+        <div><label>Categoria</label><select id="l-categoria">${CAT_SAIDA.map(c=>`<option>${c}</option>`).join('')}</select></div>
+        <div><label>Limite semanal</label><input type="number" id="l-valor" placeholder="0,00"></div>
+      </div>
+      <div class="btn-row"><button class="btn-primary" id="add-limit">Definir limite</button></div>
+    </div>
+  </section>`;
+}
+
+function renderMonthly(){
+  const mk = todayISO().slice(0,7);
+  const monthEntries = state.entries.filter(e=>monthKey(e.data)===mk && e.tipo==='saida');
+  const byCat = {}; let total = 0;
+  for(const e of monthEntries){ byCat[e.categoria] = (byCat[e.categoria]||0) + Number(e.valor); total += Number(e.valor); }
+  const cats = Object.entries(byCat).sort((a,b)=>b[1]-a[1]);
+  const maxV = Math.max(1, ...cats.map(c=>c[1]));
+  const rows = cats.map(([cat,val])=>{
+    const pct = total>0 ? Math.round((val/total)*100) : 0;
+    const widthPct = Math.round((val/maxV)*100);
+    return `<div class="mbar-row"><div class="mbar-label"><span>${cat}</span><span class="pct">${brl(val)} · ${pct}%</span></div><div class="mbar-track"><div class="mbar-fill" style="width:${widthPct}%"></div></div></div>`;
+  }).join('');
+  const [y,m] = mk.split('-');
+  const monthNames = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+  return `<section class="card"><h2 class="section-title"><span class="n">07</span> Visão do mês — ${monthNames[Number(m)-1]}</h2>${cats.length?rows:'<div class="empty-state">Sem saídas registradas neste mês ainda.</div>'}${cats.length?`<div class="hint">Total gasto no mês: ${brl(total)}</div>`:''}</section>`;
+}
+
+function renderExport(){
+  const years = Array.from(new Set(state.entries.map(e=>e.data.slice(0,4)))).sort().reverse();
+  const currentYear = todayISO().slice(0,4);
+  const yearOptions = years.length ? years : [currentYear];
+  return `
+  <section class="card">
+    <h2 class="section-title"><span class="n">08</span> Exportar dados</h2>
+    <div class="hint" style="margin-bottom:12px;">Baixa uma planilha (.csv) com os lançamentos do ano escolhido — abre direto no Excel, Google Sheets ou Numbers. Útil pra Imposto de Renda ou fechamento anual.</div>
+    <div class="row">
+      <div><label>Ano</label><select id="exp-ano">${yearOptions.map(y=>`<option value="${y}">${y}</option>`).join('')}</select></div>
+      <div style="display:flex;align-items:flex-end;"><button class="btn-primary" id="exp-ano-btn" style="width:100%;">Baixar CSV do ano</button></div>
+    </div>
+    <div class="btn-row" style="justify-content:flex-start;margin-top:6px;">
+      <span class="toggle-link" id="exp-tudo">baixar histórico completo (todos os anos)</span>
+    </div>
+  </section>`;
+}
+
+function buildCSV(entries){
+  const header = ['Data','Tipo','Categoria','Valor','Observação'];
+  const rows = [...entries].sort((a,b)=>a.data.localeCompare(b.data)).map(e=>[
+    new Date(e.data+'T00:00:00').toLocaleDateString('pt-BR'),
+    e.tipo==='entrada'?'Entrada':'Saída',
+    e.categoria,
+    Number(e.valor).toFixed(2).replace('.',','),
+    (e.desc||'').replace(/;/g,',')
+  ]);
+  const lines = [header, ...rows].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(';'));
+  return '\uFEFF' + lines.join('\r\n');
+}
+function downloadCSV(content, filename){
+  const blob = new Blob([content], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// ---------- HANDLERS ----------
+function attachHandlers(){
+  const $ = id => document.getElementById(id);
+  if($('logout')){ $('logout').onclick = doLogout; }
+
+  if($('save-pa')){
+    $('save-pa').onclick = async ()=>{
+      const cxNomes = Array.from(document.querySelectorAll('.cx-nome')).map(i=>i.value.trim());
+      const cxValores = Array.from(document.querySelectorAll('.cx-valor')).map(i=>Number(i.value)||0);
+      const caixinhas = cxNomes.map((n,i)=>({nome:n||`Caixinha ${i+1}`, valor:cxValores[i]})).filter(c=>c.nome);
+      const ctNomes = Array.from(document.querySelectorAll('.ct-nome')).map(i=>i.value.trim());
+      const ctLimites = Array.from(document.querySelectorAll('.ct-limite')).map(i=>Number(i.value)||0);
+      const cartoes = ctNomes.map((n,i)=>({nome:n||`Cartão ${i+1}`, limite:ctLimites[i]})).filter(c=>c.nome);
+      state.pontoA = { saldoConta: Number($('pa-saldo').value)||0, cartoes, caixinhas };
+      editingPontoA = false;
+      await savePontoA(state.pontoA);
+      render();
+    };
+  }
+  if($('cancel-pa')){ $('cancel-pa').onclick = ()=>{ editingPontoA=false; render(); }; }
+  if($('edit-pa')){ $('edit-pa').onclick = ()=>{ editingPontoA=true; render(); }; }
+  if($('add-cx')){
+    $('add-cx').onclick = ()=>{
+      const list = $('cx-list');
+      const div = document.createElement('div'); div.className='caixinha-item';
+      div.innerHTML = `<input type="text" class="cx-nome" placeholder="Nome da caixinha"><input type="number" class="cx-valor" placeholder="Valor"><span class="rm">×</span>`;
+      div.querySelector('.rm').onclick = ()=>div.remove();
+      list.appendChild(div);
+    };
+  }
+  document.querySelectorAll('[data-rm-cx]').forEach(el=>{ el.onclick = ()=> el.closest('.caixinha-item').remove(); });
+  if($('add-ct')){
+    $('add-ct').onclick = ()=>{
+      const list = $('ct-list');
+      const div = document.createElement('div'); div.className='caixinha-item';
+      div.innerHTML = `<input type="text" class="ct-nome" placeholder="Nome do cartão"><input type="number" class="ct-limite" placeholder="Limite"><span class="rm">×</span>`;
+      div.querySelector('.rm').onclick = ()=>div.remove();
+      list.appendChild(div);
+    };
+  }
+  document.querySelectorAll('[data-rm-ct]').forEach(el=>{ el.onclick = ()=> el.closest('.caixinha-item').remove(); });
+
+  if($('add-entry')){
+    $('add-entry').onclick = async ()=>{
+      const valor = Number($('e-valor').value);
+      if(!valor || valor<=0){ $('e-valor').focus(); return; }
+      const entry = { tipo: $('e-tipo').value, data: $('e-data').value || todayISO(), categoria: $('e-categoria').value, valor, desc: $('e-desc').value.trim() };
+      const saved = await addEntry(entry);
+      state.entries.push({ id:saved.id, ...entry });
+      render();
+    };
+  }
+  if($('e-tipo')){
+    $('e-tipo').onchange = (ev)=>{
+      const sel = $('e-categoria');
+      const opts = ev.target.value==='entrada' ? CAT_ENTRADA : CAT_SAIDA;
+      sel.innerHTML = opts.map(c=>`<option>${c}</option>`).join('');
+    };
+  }
+  document.querySelectorAll('[data-del]').forEach(el=>{
+    el.onclick = async ()=>{
+      const id = el.getAttribute('data-del');
+      await deleteEntry(id);
+      state.entries = state.entries.filter(e=>e.id!==id);
+      render();
+    };
+  });
+
+  if($('add-goal')){
+    $('add-goal').onclick = async ()=>{
+      const nome = $('g-nome').value.trim();
+      const alvo = Number($('g-alvo').value);
+      if(!nome || !alvo){ return; }
+      const g = { tipo: $('g-tipo').value, nome, valorAlvo: alvo, valorAtual: Number($('g-atual').value)||0 };
+      const saved = await addGoal(g);
+      state.goals.push({ id:saved.id, ...g });
+      render();
+    };
+  }
+  document.querySelectorAll('[data-del-goal]').forEach(el=>{
+    el.onclick = async ()=>{
+      const id = el.getAttribute('data-del-goal');
+      await deleteGoal(id);
+      state.goals = state.goals.filter(g=>g.id!==id);
+      render();
+    };
+  });
+
+  if($('add-limit')){
+    $('add-limit').onclick = async ()=>{
+      const categoria = $('l-categoria').value;
+      const valor = Number($('l-valor').value);
+      if(!valor) return;
+      await upsertLimit({ categoria, valor });
+      state.limits = state.limits.filter(l=>l.categoria!==categoria);
+      state.limits.push({ categoria, valor });
+      render();
+    };
+  }
+  document.querySelectorAll('[data-del-limit]').forEach(el=>{
+    el.onclick = async ()=>{
+      const categoria = el.getAttribute('data-del-limit');
+      await deleteLimit(categoria);
+      state.limits = state.limits.filter(l=>l.categoria!==categoria);
+      render();
+    };
+  });
+
+  if($('exp-ano-btn')){
+    $('exp-ano-btn').onclick = ()=>{
+      const year = $('exp-ano').value;
+      const filtered = state.entries.filter(e=>e.data.slice(0,4)===year);
+      downloadCSV(buildCSV(filtered), `ponto-a-gastos-${year}.csv`);
+    };
+  }
+  if($('exp-tudo')){
+    $('exp-tudo').onclick = ()=>{
+      downloadCSV(buildCSV(state.entries), `ponto-a-gastos-completo.csv`);
+    };
+  }
+}
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=> navigator.serviceWorker.register('sw.js').catch(()=>{}));
+}
+
+initAuth();
+</script>
+</body>
+</html>
