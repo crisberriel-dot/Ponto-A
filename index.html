@@ -172,7 +172,7 @@ async function loadAll(){
     sb.from('goals').select('*').eq('user_id', uid).order('created_at'),
     sb.from('limits_config').select('*').eq('user_id', uid)
   ]);
-  state.pontoA = pa.data ? { saldoConta: pa.data.saldo_conta, cartoes: pa.data.cartoes || [], caixinhas: pa.data.caixinhas || [] } : null;
+  state.pontoA = pa.data ? { saldoConta: pa.data.saldo_conta, cartoes: pa.data.cartoes || [], caixinhas: pa.data.caixinhas || [], ultimoBackup: pa.data.ultimo_backup||null } : null;
   state.entries = (en.data||[]).map(e => ({ id:e.id, tipo:e.tipo, data:e.data, categoria:e.categoria, valor:e.valor, desc:e.descricao||'', formaPagamento:e.forma_pagamento||'Conta/Pix/Débito', formaPagamentoId:e.forma_pagamento_id||null }));
   state.goals = (go.data||[]).map(g => ({ id:g.id, tipo:g.tipo, nome:g.nome, valorAlvo:g.valor_alvo, valorAtual:g.valor_atual, prazo:g.prazo||null }));
   state.limits = (li.data||[]).map(l => ({ categoria:l.categoria, valor:l.valor }));
@@ -181,7 +181,14 @@ async function loadAll(){
 
 async function savePontoA(p){
   const uid = session.user.id;
-  await sb.from('ponto_a').upsert({ user_id:uid, saldo_conta:p.saldoConta, cartoes:p.cartoes, caixinhas:p.caixinhas, updated_at:new Date().toISOString() });
+  await sb.from('ponto_a').upsert({ user_id:uid, saldo_conta:p.saldoConta, cartoes:p.cartoes, caixinhas:p.caixinhas, ultimo_backup:p.ultimoBackup||null, updated_at:new Date().toISOString() });
+}
+async function registrarBackup(){
+  if(!state.pontoA) return;
+  const uid = session.user.id;
+  const hoje = todayISO();
+  await sb.from('ponto_a').update({ ultimo_backup: hoje }).eq('user_id', uid);
+  state.pontoA.ultimoBackup = hoje;
 }
 async function addEntry(entry){
   const uid = session.user.id;
@@ -403,6 +410,15 @@ function renderTimeline(){
 
 function generateTips(weekEntries, totalEntradas, totalSaidas){
   const tips = [];
+  if(state.entries.length>0){
+    const ultimoBackup = state.pontoA && state.pontoA.ultimoBackup;
+    const diasSemBackup = ultimoBackup ? Math.floor((new Date(todayISO()+'T00:00:00') - new Date(ultimoBackup+'T00:00:00'))/86400000) : null;
+    if(!ultimoBackup){
+      tips.push({type:'default', text:`Você ainda não fez um backup completo dos dados. O Supabase gratuito não faz backup automático — vale baixar o histórico completo (seção 08) de vez em quando e guardar num lugar seu, tipo Google Drive.`});
+    } else if(diasSemBackup >= 30){
+      tips.push({type:'alert', text:`Já fazem ${diasSemBackup} dias desde o último backup completo. Vale baixar o histórico atualizado (seção 08) — o Supabase gratuito não tem recuperação automática se algo der errado.`});
+    }
+  }
   if(totalSaidas > totalEntradas && totalEntradas>0){
     tips.push({type:'alert', text:`Você gastou ${brl(totalSaidas-totalEntradas)} a mais do que entrou essa semana. Vale segurar gastos variáveis até o próximo dia de entrada.`});
   }
@@ -548,6 +564,10 @@ function renderExport(){
   const years = Array.from(new Set(state.entries.map(e=>e.data.slice(0,4)))).sort().reverse();
   const currentYear = todayISO().slice(0,4);
   const yearOptions = years.length ? years : [currentYear];
+  const ultimoBackup = state.pontoA && state.pontoA.ultimoBackup;
+  const backupInfo = ultimoBackup
+    ? `Último backup completo: ${new Date(ultimoBackup+'T00:00:00').toLocaleDateString('pt-BR')}.`
+    : `Você ainda não fez um backup completo.`;
   return `
   <section class="card">
     <h2 class="section-title"><span class="n">08</span> Exportar dados</h2>
@@ -559,6 +579,7 @@ function renderExport(){
     <div class="btn-row" style="justify-content:flex-start;margin-top:6px;">
       <span class="toggle-link" id="exp-tudo">baixar histórico completo (todos os anos)</span>
     </div>
+    <div class="hint" style="margin-top:10px;">${backupInfo} O Supabase gratuito não faz backup automático — guarde esse CSV completo num lugar seu (Google Drive, por exemplo) de vez em quando.</div>
   </section>`;
 }
 
@@ -712,8 +733,10 @@ function attachHandlers(){
     };
   }
   if($('exp-tudo')){
-    $('exp-tudo').onclick = ()=>{
+    $('exp-tudo').onclick = async ()=>{
       downloadCSV(buildCSV(state.entries), `ponto-a-gastos-completo.csv`);
+      await registrarBackup();
+      render();
     };
   }
 }
