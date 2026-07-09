@@ -173,8 +173,8 @@ async function loadAll(){
     sb.from('limits_config').select('*').eq('user_id', uid)
   ]);
   state.pontoA = pa.data ? { saldoConta: pa.data.saldo_conta, cartoes: pa.data.cartoes || [], caixinhas: pa.data.caixinhas || [] } : null;
-  state.entries = (en.data||[]).map(e => ({ id:e.id, tipo:e.tipo, data:e.data, categoria:e.categoria, valor:e.valor, desc:e.descricao||'', formaPagamento:e.forma_pagamento||'Conta/Pix/Débito' }));
-  state.goals = (go.data||[]).map(g => ({ id:g.id, tipo:g.tipo, nome:g.nome, valorAlvo:g.valor_alvo, valorAtual:g.valor_atual }));
+  state.entries = (en.data||[]).map(e => ({ id:e.id, tipo:e.tipo, data:e.data, categoria:e.categoria, valor:e.valor, desc:e.descricao||'', formaPagamento:e.forma_pagamento||'Conta/Pix/Débito', formaPagamentoId:e.forma_pagamento_id||null }));
+  state.goals = (go.data||[]).map(g => ({ id:g.id, tipo:g.tipo, nome:g.nome, valorAlvo:g.valor_alvo, valorAtual:g.valor_atual, prazo:g.prazo||null }));
   state.limits = (li.data||[]).map(l => ({ categoria:l.categoria, valor:l.valor }));
   render();
 }
@@ -185,13 +185,13 @@ async function savePontoA(p){
 }
 async function addEntry(entry){
   const uid = session.user.id;
-  const { data } = await sb.from('entries').insert({ user_id:uid, tipo:entry.tipo, data:entry.data, categoria:entry.categoria, valor:entry.valor, descricao:entry.desc, forma_pagamento:entry.formaPagamento }).select().single();
+  const { data } = await sb.from('entries').insert({ user_id:uid, tipo:entry.tipo, data:entry.data, categoria:entry.categoria, valor:entry.valor, descricao:entry.desc, forma_pagamento:entry.formaPagamento, forma_pagamento_id:entry.formaPagamentoId }).select().single();
   return data;
 }
 async function deleteEntry(id){ await sb.from('entries').delete().eq('id', id); }
 async function addGoal(g){
   const uid = session.user.id;
-  const { data } = await sb.from('goals').insert({ user_id:uid, tipo:g.tipo, nome:g.nome, valor_alvo:g.valorAlvo, valor_atual:g.valorAtual }).select().single();
+  const { data } = await sb.from('goals').insert({ user_id:uid, tipo:g.tipo, nome:g.nome, valor_alvo:g.valorAlvo, valor_atual:g.valorAtual, prazo:g.prazo||null }).select().single();
   return data;
 }
 async function deleteGoal(id){ await sb.from('goals').delete().eq('id', id); }
@@ -204,12 +204,20 @@ async function deleteLimit(categoria){
   await sb.from('limits_config').delete().eq('user_id', uid).eq('categoria', categoria);
 }
 
+function isContaPayment(e){
+  if(e.formaPagamentoId) return e.formaPagamentoId==='conta';
+  return !e.formaPagamento || e.formaPagamento==='Conta/Pix/Débito';
+}
+function matchesCard(e, cartao){
+  if(e.formaPagamentoId) return e.formaPagamentoId===cartao.id;
+  return e.formaPagamento===cartao.nome; // fallback: lançamentos antigos sem id ainda
+}
 function saldoAtual(){
   if(!state.pontoA) return 0;
   let base = Number(state.pontoA.saldoConta)||0;
   for(const e of state.entries){
     if(e.tipo==='entrada'){ base += Number(e.valor); }
-    else if(!e.formaPagamento || e.formaPagamento==='Conta/Pix/Débito'){ base -= Number(e.valor); }
+    else if(isContaPayment(e)){ base -= Number(e.valor); }
   }
   return base;
 }
@@ -236,9 +244,9 @@ function invoiceCycle(diaFechamento, ref){
   cycleStart.setDate(df+1);
   return { start: cycleStart.toISOString().slice(0,10), end: cycleEnd.toISOString().slice(0,10) };
 }
-function faturaAtual(cartaoNome, diaFechamento){
+function faturaAtual(cartao, diaFechamento){
   const { start, end } = invoiceCycle(diaFechamento, todayISO());
-  return state.entries.filter(e=>e.tipo==='saida' && e.formaPagamento===cartaoNome && e.data>=start && e.data<=end)
+  return state.entries.filter(e=>e.tipo==='saida' && e.data>=start && e.data<=end && matchesCard(e, cartao))
     .reduce((s,e)=>s+Number(e.valor),0);
 }
 
@@ -302,8 +310,9 @@ function renderPontoA(){
         <input type="number" class="cx-valor" placeholder="Valor" value="${c.valor!==undefined?c.valor:''}">
         <span class="rm" data-rm-cx="${i}">×</span>
       </div>`).join('');
-    const cartoesHtml = (p.cartoes && p.cartoes.length ? p.cartoes : [{nome:'',limite:'',diaFechamento:'',diaVencimento:''}]).map((c,i)=>`
+    const cartoesHtml = (p.cartoes && p.cartoes.length ? p.cartoes : [{id:'',nome:'',limite:'',diaFechamento:'',diaVencimento:''}]).map((c,i)=>`
       <div class="cartao-item" data-idx="${i}">
+        <input type="hidden" class="ct-id" value="${c.id||''}">
         <div class="row">
           <input type="text" class="ct-nome" placeholder="Nome do cartão" value="${c.nome||''}">
           <span class="rm" data-rm-ct="${i}">×</span>
@@ -336,7 +345,7 @@ function renderPontoA(){
   const totalLimite = cartoes.reduce((s,c)=>s+(Number(c.limite)||0),0);
   const cartoesResumo = cartoes.length ? cartoes.map(c=>{
     const df = Number(c.diaFechamento)||1;
-    const fatura = faturaAtual(c.nome, df);
+    const fatura = faturaAtual(c, df);
     const disponivel = (Number(c.limite)||0) - fatura;
     return `<div class="cartao-resumo">
       <div class="l1"><span class="nome">${c.nome}</span><span style="font-family:var(--font-mono);">${brl(c.limite)}</span></div>
@@ -409,7 +418,7 @@ function generateTips(weekEntries, totalEntradas, totalSaidas){
     for(const c of state.pontoA.cartoes){
       const limite = Number(c.limite)||0;
       if(limite<=0) continue;
-      const fatura = faturaAtual(c.nome, Number(c.diaFechamento)||1);
+      const fatura = faturaAtual(c, Number(c.diaFechamento)||1);
       const pct = fatura/limite;
       if(pct >= 1){ tips.push({type:'alert', text:`Cartão "${c.nome}" estourou o limite: fatura atual de ${brl(fatura)} contra ${brl(limite)} disponíveis.`}); }
       else if(pct >= 0.8){ tips.push({type:'default', text:`Cartão "${c.nome}" já usou ${Math.round(pct*100)}% do limite nesta fatura (${brl(fatura)} de ${brl(limite)}).`}); }
@@ -449,8 +458,9 @@ function renderEntryForm(){
 
 function formaPagamentoOptions(){
   const cartoes = (state.pontoA && state.pontoA.cartoes) || [];
-  const opts = ['Conta/Pix/Débito', ...cartoes.map(c=>c.nome)];
-  return opts.map(o=>`<option>${o}</option>`).join('');
+  let opts = `<option value="conta">Conta/Pix/Débito</option>`;
+  opts += cartoes.map(c=>`<option value="${c.id}">${c.nome}</option>`).join('');
+  return opts;
 }
 
 function renderEntriesList(){
@@ -466,10 +476,19 @@ function renderEntriesList(){
 function renderGoals(){
   const goalsHtml = state.goals.length ? state.goals.map(g=>{
     const pct = g.valorAlvo>0 ? Math.min(100, Math.round((g.valorAtual/g.valorAlvo)*100)) : 0;
+    let prazoInfo = '';
+    if(g.prazo){
+      const dias = Math.ceil((new Date(g.prazo+'T00:00:00') - new Date(todayISO()+'T00:00:00')) / 86400000);
+      const prazoFmt = new Date(g.prazo+'T00:00:00').toLocaleDateString('pt-BR');
+      if(dias < 0){ prazoInfo = `<span style="color:var(--coral);">Prazo vencido (${prazoFmt})</span>`; }
+      else if(dias === 0){ prazoInfo = `<span style="color:var(--coral);">Prazo é hoje!</span>`; }
+      else { prazoInfo = `<span>Faltam ${dias} dia${dias>1?'s':''} (${prazoFmt})</span>`; }
+    }
     return `<div class="goal">
       <div class="goal-head"><span class="name">${g.nome}</span><span class="tag">${GOAL_TYPES.find(t=>t[0]===g.tipo)?.[1]||g.tipo} <span class="del" data-del-goal="${g.id}" style="cursor:pointer;color:var(--text-dim);margin-left:6px;">×</span></span></div>
       <div class="goal-bar-track"><div class="goal-bar-fill" style="width:${pct}%"></div></div>
       <div class="goal-nums"><span>${brl(g.valorAtual)} de ${brl(g.valorAlvo)}</span><span>${pct}%</span></div>
+      ${prazoInfo ? `<div class="hint" style="margin-top:2px;">${prazoInfo}</div>` : ''}
     </div>`;
   }).join('') : '<div class="empty-state">Nenhum objetivo cadastrado ainda.</div>';
   return `
@@ -485,6 +504,8 @@ function renderGoals(){
         <div><label>Valor alvo</label><input type="number" id="g-alvo" placeholder="0,00"></div>
         <div><label>Valor já guardado</label><input type="number" id="g-atual" placeholder="0,00"></div>
       </div>
+      <label>Prazo (opcional)</label>
+      <input type="date" id="g-prazo">
       <div class="btn-row"><button class="btn-primary" id="add-goal">Adicionar objetivo</button></div>
     </div>
   </section>`;
@@ -573,11 +594,12 @@ function attachHandlers(){
       const cxNomes = Array.from(document.querySelectorAll('.cx-nome')).map(i=>i.value.trim());
       const cxValores = Array.from(document.querySelectorAll('.cx-valor')).map(i=>Number(i.value)||0);
       const caixinhas = cxNomes.map((n,i)=>({nome:n||`Caixinha ${i+1}`, valor:cxValores[i]})).filter(c=>c.nome);
+      const ctIds = Array.from(document.querySelectorAll('.ct-id')).map(i=>i.value||crypto.randomUUID());
       const ctNomes = Array.from(document.querySelectorAll('.ct-nome')).map(i=>i.value.trim());
       const ctLimites = Array.from(document.querySelectorAll('.ct-limite')).map(i=>Number(i.value)||0);
       const ctFechamentos = Array.from(document.querySelectorAll('.ct-fechamento')).map(i=>Number(i.value)||1);
       const ctVencimentos = Array.from(document.querySelectorAll('.ct-vencimento')).map(i=>Number(i.value)||null);
-      const cartoes = ctNomes.map((n,i)=>({nome:n||`Cartão ${i+1}`, limite:ctLimites[i], diaFechamento:ctFechamentos[i], diaVencimento:ctVencimentos[i]})).filter(c=>c.nome);
+      const cartoes = ctNomes.map((n,i)=>({id:ctIds[i], nome:n||`Cartão ${i+1}`, limite:ctLimites[i], diaFechamento:ctFechamentos[i], diaVencimento:ctVencimentos[i]})).filter(c=>c.nome);
       state.pontoA = { saldoConta: Number($('pa-saldo').value)||0, cartoes, caixinhas };
       editingPontoA = false;
       await savePontoA(state.pontoA);
@@ -600,7 +622,7 @@ function attachHandlers(){
     $('add-ct').onclick = ()=>{
       const list = $('ct-list');
       const div = document.createElement('div'); div.className='cartao-item';
-      div.innerHTML = `<div class="row"><input type="text" class="ct-nome" placeholder="Nome do cartão"><span class="rm">×</span></div><div class="row"><input type="number" class="ct-limite" placeholder="Limite"><input type="number" class="ct-fechamento" placeholder="Dia fecha (1-28)" min="1" max="28"><input type="number" class="ct-vencimento" placeholder="Dia vence (1-28)" min="1" max="28"></div>`;
+      div.innerHTML = `<input type="hidden" class="ct-id" value=""><div class="row"><input type="text" class="ct-nome" placeholder="Nome do cartão"><span class="rm">×</span></div><div class="row"><input type="number" class="ct-limite" placeholder="Limite"><input type="number" class="ct-fechamento" placeholder="Dia fecha (1-28)" min="1" max="28"><input type="number" class="ct-vencimento" placeholder="Dia vence (1-28)" min="1" max="28"></div>`;
       div.querySelector('.rm').onclick = ()=>div.remove();
       list.appendChild(div);
     };
@@ -612,8 +634,13 @@ function attachHandlers(){
       const valor = Number($('e-valor').value);
       if(!valor || valor<=0){ $('e-valor').focus(); return; }
       const tipo = $('e-tipo').value;
-      const formaPagamento = tipo==='saida' ? $('e-pgto').value : 'Conta/Pix/Débito';
-      const entry = { tipo, data: $('e-data').value || todayISO(), categoria: $('e-categoria').value, valor, desc: $('e-desc').value.trim(), formaPagamento };
+      let formaPagamentoId = 'conta', formaPagamento = 'Conta/Pix/Débito';
+      if(tipo==='saida'){
+        const sel = $('e-pgto');
+        formaPagamentoId = sel.value;
+        formaPagamento = sel.options[sel.selectedIndex].text;
+      }
+      const entry = { tipo, data: $('e-data').value || todayISO(), categoria: $('e-categoria').value, valor, desc: $('e-desc').value.trim(), formaPagamento, formaPagamentoId };
       const saved = await addEntry(entry);
       state.entries.push({ id:saved.id, ...entry });
       render();
@@ -642,7 +669,7 @@ function attachHandlers(){
       const nome = $('g-nome').value.trim();
       const alvo = Number($('g-alvo').value);
       if(!nome || !alvo){ return; }
-      const g = { tipo: $('g-tipo').value, nome, valorAlvo: alvo, valorAtual: Number($('g-atual').value)||0 };
+      const g = { tipo: $('g-tipo').value, nome, valorAlvo: alvo, valorAtual: Number($('g-atual').value)||0, prazo: $('g-prazo').value || null };
       const saved = await addGoal(g);
       state.goals.push({ id:saved.id, ...g });
       render();
